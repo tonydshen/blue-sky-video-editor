@@ -3,6 +3,8 @@
 # Gemini revised
 # 05/28/26
 # TS revised to suit blue-sky-post
+# 07/14/26
+# TS revised to suit blue-sky-video-editor
 #
 set -e  # Exit on any error
 
@@ -28,11 +30,11 @@ git add .
 if git diff-index --quiet HEAD --; then
     echo "nb. No changes detected to commit."
 else
-    git commit -m "Update blue-sky-post $DATE from $(hostname)"
+    git commit -m "Update blue-sky-video-editor $DATE from $(hostname)"
 fi
 
 # 4. Push to GitHub
-echo "Pushing to origin blue-sky-post ..."
+echo "Pushing to origin blue-sky-video-editor ..."
 git push
 
 echo "✅ Update complete for $(hostname) at $DATE"

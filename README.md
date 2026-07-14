@@ -31,6 +31,3 @@ tshen@datacommlab.com:~/android/blue-sky-video-editor/deploy.sh
 GitHub repo
 tonydshen/blue-sky-video-editor
 
-从技术上看，要实现太空数据中心还有好几年的时间。怎么说呢? 太空数据中心必须建立在远地轨道，即空间站运行的轨道。SpaceX比较成熟的技术是部署 Starlink satellites 到近地轨道，用的是Falcon 9。Falcon 9 可以运送货物至远地轨道，但 payload 远不如 Starship。部署数据中心需要大的运力，必须用 Starship。而Starship 还远不能达到那个高度。七月十六日预定Starship第十三次试飞，主要目标是解决第十二次试飞暴露出的不少问题，仍然局限于近地轨道。
-
-顺便提一下，欢迎此群的对投资有兴趣的群友参加投资群的讨论。由于股市高度集中于人工智能领域，谈AI离不开谈投资，谈投资离不开讨论AI和高科技。由于投资群人数超过两百，不能用二维码参加，有兴趣参加投资群的群友请直接与我联系加入即可。
