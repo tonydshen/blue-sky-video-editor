@@ -7,6 +7,8 @@
 # updated for bssetdb, a branch of bsset
 # Exit immediately if a command exits with a non-zero status
 # TS revised to suit blue-sky-post
+# 07/14/26
+# TS revised to suit blue-sky-video-editor
 #
 set -e
 
