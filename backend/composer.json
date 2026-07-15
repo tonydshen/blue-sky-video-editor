@@ -1,0 +1,13 @@
+{
+  "name": "tonydshen/blue-sky-video-editor-backend",
+  "description": "Blue Sky Video Editor server: upload receiver and AI-planned FFmpeg render worker.",
+  "type": "project",
+  "require": {
+    "php": ">=8.1",
+    "anthropic-ai/sdk": "^0.36.0",
+    "guzzlehttp/guzzle": "^7.8"
+  },
+  "config": {
+    "optimize-autoloader": true
+  }
+}
