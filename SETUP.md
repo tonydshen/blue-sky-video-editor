@@ -96,11 +96,25 @@ Video files are large. In `/etc/php/8.x/apache2/php.ini`:
 upload_max_filesize = 500M
 post_max_size = 2G
 max_file_uploads = 40
+max_input_time = 600
 max_execution_time = 300
 memory_limit = 256M
 ```
 
 Then `sudo systemctl restart apache2`.
+
+Why these matter:
+
+- **`post_max_size`** caps the **whole request**, not each file. The app sends
+  every clip plus the sound track in one multipart POST, so this is the real
+  ceiling on project size. Raising it to 2G is safe: PHP streams uploads to a
+  temp file, so it does not need a matching `memory_limit`.
+- **`max_input_time`** limits how long PHP will spend *receiving* the request.
+  The common 60s default is not enough for a phone uploading a few hundred MB
+  over cellular, and the failure looks like a generic upload error.
+
+`bsve_doctor.php` checks all four and reads them from the **web SAPI's**
+php.ini — the CLI's values are different and are not the ones that matter here.
 
 ### The render worker (cron)
 

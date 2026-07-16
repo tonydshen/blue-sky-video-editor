@@ -200,6 +200,37 @@ if ($webInis === []) {
         $toBytes($pms) >= $needed
             ? ok("$label post_max_size", $pms)
             : warning("$label post_max_size = $pms — too small for multi-clip uploads", "Set post_max_size = 2G in $ini, then restart apache2.");
+
+        // max_input_time caps how long PHP will spend RECEIVING the request.
+        // A phone uploading a few hundred MB over cellular blows past the
+        // common 60s default, and the failure surfaces as a generic upload
+        // error. -1 means unlimited (the CLI default; rare for the web SAPI).
+        $mit = $get('max_input_time');
+        if ($mit === '?') {
+            warning("$label max_input_time not set", "Add max_input_time = 600 to $ini — slow mobile uploads time out otherwise.");
+        } elseif ((int) $mit === -1 || (int) $mit >= 300) {
+            ok("$label max_input_time", $mit);
+        } else {
+            warning(
+                "$label max_input_time = {$mit}s — slow mobile uploads will time out",
+                "Set max_input_time = 600 in $ini, then restart apache2."
+            );
+        }
+
+        // max_execution_time bounds the upload handler itself. bsve_upload.php
+        // only moves files and writes job.json (the render is a separate cron
+        // worker), but large multipart requests still take time to process.
+        $met = $get('max_execution_time');
+        if ($met === '?') {
+            warning("$label max_execution_time not set", "Add max_execution_time = 300 to $ini.");
+        } elseif ((int) $met === 0 || (int) $met >= 120) {
+            ok("$label max_execution_time", $met);
+        } else {
+            warning(
+                "$label max_execution_time = {$met}s — may cut off large uploads",
+                "Set max_execution_time = 300 in $ini, then restart apache2."
+            );
+        }
     }
 }
 
