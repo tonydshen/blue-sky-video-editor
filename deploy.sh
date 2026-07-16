@@ -14,6 +14,16 @@
 
 set -e
 
+# Refuse to be sourced. Under `source`, $0 is the interactive shell rather than
+# this file, so the `exec` re-run below would replace the user's shell instead
+# of re-running the deploy — the install steps would silently never happen.
+# `set -e` would also leak into the interactive shell.
+if [ "${BASH_SOURCE[0]}" != "$0" ]; then
+    echo "❌ Don't source this script — run it:"
+    echo "     ./deploy.sh        (or: bash deploy.sh)"
+    return 1 2>/dev/null || exit 1
+fi
+
 main() {
     echo "--- Starting Deployment ---"
 
