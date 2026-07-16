@@ -58,6 +58,7 @@ main() {
     sudo install -m 644 backend/bsve_lib.php    "$SCRIPTS_DIR/"
     sudo install -m 644 backend/bsve_upload.php "$SCRIPTS_DIR/"
     sudo install -m 644 backend/bsve_worker.php "$SCRIPTS_DIR/"
+    sudo install -m 644 backend/bsve_doctor.php "$SCRIPTS_DIR/"
     sudo install -m 644 backend/composer.json   "$SCRIPTS_DIR/"
     # composer.lock pins the exact, verified dependency versions — copy it so
     # the server installs those rather than resolving fresh ones.

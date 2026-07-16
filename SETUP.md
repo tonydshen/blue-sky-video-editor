@@ -105,6 +105,19 @@ Then `sudo systemctl restart apache2`.
 ### The render worker (cron)
 
 The worker is a CLI script. It locks itself, so overlapping cron runs are safe.
+Add this **once**; it persists across reboots and deploys (`deploy.sh` does not
+touch the crontab).
+
+The job runs as `www-data`, which cannot create a file in root-owned
+`/var/log` — so create the log first, or the cron output redirect fails
+silently:
+
+```bash
+sudo touch /var/log/bsve.log
+sudo chown www-data:www-data /var/log/bsve.log
+```
+
+Then:
 
 ```bash
 sudo crontab -u www-data -e
@@ -113,6 +126,28 @@ sudo crontab -u www-data -e
 ```cron
 * * * * * /usr/bin/php /var/www/html/scripts/bsve_worker.php >> /var/log/bsve.log 2>&1
 ```
+
+Verify with `sudo crontab -u www-data -l`. After a minute, `/var/log/bsve.log`
+should exist and be empty — the worker ran, found nothing queued, and exited.
+
+---
+
+## Preflight check
+
+`bsve_doctor.php` verifies everything the pipeline needs and prints a fix for
+whatever is missing — PHP extensions, FFmpeg, the font, API key permissions,
+the SDK and its HTTP client, the jobs directory, Apache's upload limits,
+mail(), and the worker cron.
+
+```bash
+sudo php /var/www/html/scripts/bsve_doctor.php          # free checks only
+sudo php /var/www/html/scripts/bsve_doctor.php --api    # also makes ONE real Claude call
+```
+
+Run it as root so it can read the `www-data` crontab and check the permissions
+on `/etc/bsve/config.php`. Use `--api` before a live test to confirm the server
+has outbound HTTPS to api.anthropic.com — if it doesn't, renders silently fall
+back to non-AI plans. It exits non-zero if anything is a hard failure.
 
 ---
 
