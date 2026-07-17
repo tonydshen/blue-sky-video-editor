@@ -7,9 +7,18 @@
  * mode 0640, owned by root:www-data. See SETUP.md.
  */
 
-// Where uploads and rendered videos live on disk, and how they map to URLs.
-const BSVE_JOBS_DIR = '/var/www/html/tmp/bsve/';
-const BSVE_JOBS_URL = 'https://datacommlab.com/tmp/bsve/';
+// Storage is deliberately split in two.
+//
+// BSVE_WORK_DIR is PRIVATE and lives outside the web root. It holds job.json
+// (which contains the user's name, email, phone and IP), the raw uploaded
+// clips, the caption sidecar files, and the render log. None of that may ever
+// be served over HTTP.
+//
+// BSVE_PUB_DIR is PUBLIC and holds one thing per job: the finished MP4, which
+// needs a URL the user can open from an email. Nothing else is copied there.
+const BSVE_WORK_DIR = '/var/lib/bsve/';
+const BSVE_PUB_DIR  = '/var/www/html/tmp/bsve/';
+const BSVE_PUB_URL  = 'https://datacommlab.com/tmp/bsve/';
 
 const BSVE_ADMIN_EMAIL = 'support@datacommlab.com';
 const BSVE_FROM_EMAIL  = 'noreply@datacommlab.com';

@@ -36,7 +36,7 @@ $dryRun  = array_key_exists('dry-run', $options);
 // there, a single run under sudo leaves behind a root-owned lock that the
 // www-data cron can then never open, silently wedging the worker forever.
 // Here, www-data owns the directory, so it can always replace a stray lock.
-$lockPath = BSVE_JOBS_DIR . '.worker.lock';
+$lockPath = BSVE_WORK_DIR . '.worker.lock';
 $lock = @fopen($lockPath, 'c');
 
 if ($lock === false) {
@@ -63,7 +63,7 @@ if (!flock($lock, LOCK_EX | LOCK_NB)) {
 function bsve_pending_jobs(?string $onlyJob): array
 {
     $jobs = [];
-    foreach (glob(BSVE_JOBS_DIR . '*/job.json') ?: [] as $file) {
+    foreach (glob(BSVE_WORK_DIR . '*/job.json') ?: [] as $file) {
         $job = json_decode((string) file_get_contents($file), true);
         if (!is_array($job)) {
             continue;
@@ -85,7 +85,7 @@ function bsve_pending_jobs(?string $onlyJob): array
 function bsve_save(array $job): void
 {
     file_put_contents(
-        BSVE_JOBS_DIR . $job['job_id'] . '/job.json',
+        BSVE_WORK_DIR . $job['job_id'] . '/job.json',
         json_encode($job, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
     );
 }
@@ -141,7 +141,7 @@ $secrets = bsve_secrets();
 
 foreach (bsve_pending_jobs($onlyJob) as $job) {
     $jobId  = $job['job_id'];
-    $jobDir = BSVE_JOBS_DIR . $jobId;
+    $jobDir = BSVE_WORK_DIR . $jobId;
 
     if (!$dryRun) {
         $job['status'] = 'rendering';
@@ -198,8 +198,24 @@ foreach (bsve_pending_jobs($onlyJob) as $job) {
             throw new RuntimeException("FFmpeg failed with exit code {$code}.");
         }
 
-        // 5. Publish and notify.
-        $url = BSVE_JOBS_URL . $jobId . '/' . rawurlencode(basename($outFile));
+        // 5. Publish ONLY the finished MP4 to the web root. Everything else —
+        //    job.json with the user's contact details, the raw source clips,
+        //    the caption sidecars, this log — stays in the private work dir.
+        $pubDir = BSVE_PUB_DIR . $jobId;
+        if (!is_dir($pubDir) && !mkdir($pubDir, 0755, true) && !is_dir($pubDir)) {
+            throw new RuntimeException("Could not create the publish directory {$pubDir}.");
+        }
+        $pubFile = $pubDir . '/' . basename($outFile);
+        if (!rename($outFile, $pubFile)) {
+            // rename() fails across filesystems; fall back to a copy.
+            if (!copy($outFile, $pubFile)) {
+                throw new RuntimeException("Could not publish the video to {$pubFile}.");
+            }
+            @unlink($outFile);
+        }
+        @chmod($pubFile, 0644);
+
+        $url = BSVE_PUB_URL . $jobId . '/' . rawurlencode(basename($pubFile));
         $job['status'] = 'done';
         $job['url'] = $url;
         $job['finished_at'] = date('c');

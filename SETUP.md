@@ -7,12 +7,31 @@ Two halves, wired together by the existing push/pull pipeline:
   `bsve_worker.php` renders it with FFmpeg and emails the link.
 
 ```
-app  --multipart POST-->  scripts/bsve_upload.php  -->  /var/www/html/tmp/bsve/<job>/job.json
+app  --multipart POST-->  scripts/bsve_upload.php  -->  /var/lib/bsve/<job>/job.json   (private)
                                                               |
                                             cron --> bsve_worker.php
                                                               |
-                              Claude plans the edit --> FFmpeg renders --> email the MP4 URL
+                              Claude plans the edit --> FFmpeg renders
+                                                              |
+                        /var/www/html/tmp/bsve/<job>/video.mp4 (public) --> emailed to the user
 ```
+
+## Storage layout — and why it is split
+
+| Directory | Holds | Served over HTTP? |
+| --- | --- | --- |
+| `/var/lib/bsve/<job-id>/` | `job.json` (name, email, phone, IP), the raw uploaded clips, caption sidecars, `render.log`, the worker lock | **No** — outside the web root |
+| `/var/www/html/tmp/bsve/<job-id>/` | the finished `.mp4`, nothing else | Yes |
+
+The finished video needs a public URL so the user can open it from an email.
+Everything else must not be public: a job id is only a timestamp plus random
+bytes, so anything sitting next to the MP4 is readable by anyone who learns or
+guesses that id. The worker therefore renders into the private directory and
+**moves only the MP4** into the public one.
+
+`bsve_doctor.php` enforces this: it fails if the work directory is inside the
+document root, or if anything other than an MP4 appears in the publish
+directory.
 
 ---
 
@@ -84,9 +103,10 @@ cd ~/android/blue-sky-video-editor
 ./deploy.sh
 ```
 
-`deploy.sh` copies the PHP into `/var/www/html/scripts/`, creates the job
-directory `/var/www/html/tmp/bsve/`, runs `composer install`, and warns about
-anything missing.
+`deploy.sh` copies the PHP into `/var/www/html/scripts/`, creates the private
+work directory `/var/lib/bsve/` and the public publish directory
+`/var/www/html/tmp/bsve/`, runs `composer install`, and warns about anything
+missing.
 
 ### PHP upload limits
 
@@ -175,7 +195,7 @@ php /var/www/html/scripts/bsve_worker.php --job=<job-id> --dry-run
 php /var/www/html/scripts/bsve_worker.php --job=<job-id>
 ```
 
-Every job writes `/var/www/html/tmp/bsve/<job-id>/render.log` — the Claude plan,
+Every job writes `/var/lib/bsve/<job-id>/render.log` — the Claude plan,
 the validated plan, the exact FFmpeg command, and FFmpeg's own output.
 
 ---

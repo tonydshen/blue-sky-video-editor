@@ -142,26 +142,68 @@ if (!is_readable($autoload)) {
 // ---------------------------------------------------------------- Job storage
 section('Job storage');
 
-if (!is_dir(BSVE_JOBS_DIR)) {
-    bad('jobs dir missing: ' . BSVE_JOBS_DIR, 'sudo install -d -m 775 -o www-data -g www-data ' . BSVE_JOBS_DIR);
-} else {
+$describe = static function (string $dir): array {
     $owner = function_exists('posix_getpwuid')
-        ? (posix_getpwuid(fileowner(BSVE_JOBS_DIR))['name'] ?? '?')
+        ? (posix_getpwuid(fileowner($dir))['name'] ?? '?')
         : '?';
-    $perms = substr(sprintf('%o', fileperms(BSVE_JOBS_DIR)), -4);
-    ok('jobs dir exists', BSVE_JOBS_DIR . " (owner $owner, mode $perms)");
+    return [$owner, substr(sprintf('%o', fileperms($dir)), -4)];
+};
 
-    // Apache writes uploads here; the cron worker writes renders here.
-    $probe = BSVE_JOBS_DIR . '.doctor_write_test';
-    if (@file_put_contents($probe, 'x') !== false) {
-        @unlink($probe);
-        ok('jobs dir writable by ' . (function_exists('posix_getpwuid') ? posix_getpwuid(posix_geteuid())['name'] : 'current user'));
-    } else {
-        warning('jobs dir not writable as the current user', 'Fine if you are not www-data; uploads run as www-data.');
-    }
+// --- Private work dir: raw uploads + job.json (name, email, phone, IP). ---
+if (!is_dir(BSVE_WORK_DIR)) {
+    bad('work dir missing: ' . BSVE_WORK_DIR, 'sudo install -d -m 750 -o www-data -g www-data ' . BSVE_WORK_DIR);
+} else {
+    [$owner, $perms] = $describe(BSVE_WORK_DIR);
+    ok('work dir exists (private)', BSVE_WORK_DIR . " (owner $owner, mode $perms)");
 
     if ($owner !== 'www-data') {
-        warning("jobs dir owned by $owner, not www-data", 'sudo chown -R www-data:www-data ' . BSVE_JOBS_DIR);
+        warning("work dir owned by $owner, not www-data", 'sudo chown -R www-data:www-data ' . BSVE_WORK_DIR);
+    }
+
+    // The whole point of this directory is that Apache cannot serve it. If it
+    // ever ends up under the document root, every uploader's contact details
+    // and raw video become public to anyone who guesses a job id.
+    // Under CLI, DOCUMENT_ROOT is present but empty — so `?? default` never
+    // fires and the check would silently pass. Use ?: to catch both.
+    $docRoot = rtrim(($_SERVER['DOCUMENT_ROOT'] ?? '') ?: '/var/www/html', '/');
+    $workReal = realpath(BSVE_WORK_DIR) ?: BSVE_WORK_DIR;
+    if (str_starts_with($workReal . '/', $docRoot . '/')) {
+        bad(
+            "work dir $workReal is INSIDE the web root ($docRoot) — job.json and raw uploads are publicly readable",
+            'Move BSVE_WORK_DIR outside the document root (see bsve_config.php).'
+        );
+    } else {
+        ok('work dir is outside the web root', "not under $docRoot");
+    }
+}
+
+// --- Public dir: finished MP4s only. ---
+if (!is_dir(BSVE_PUB_DIR)) {
+    bad('publish dir missing: ' . BSVE_PUB_DIR, 'sudo install -d -m 755 -o www-data -g www-data ' . BSVE_PUB_DIR);
+} else {
+    [$owner, $perms] = $describe(BSVE_PUB_DIR);
+    ok('publish dir exists (public)', BSVE_PUB_DIR . " (owner $owner, mode $perms)");
+
+    if ($owner !== 'www-data') {
+        warning("publish dir owned by $owner, not www-data", 'sudo chown -R www-data:www-data ' . BSVE_PUB_DIR);
+    }
+
+    // Nothing but MP4s belongs here. Anything else is a leak — most likely a
+    // leftover job directory from before the work/publish split.
+    $leaked = [];
+    foreach (glob(BSVE_PUB_DIR . '*/*') ?: [] as $path) {
+        if (is_dir($path) || !str_ends_with(strtolower($path), '.mp4')) {
+            $leaked[] = $path;
+        }
+    }
+    if ($leaked === []) {
+        ok('publish dir contains only MP4s');
+    } else {
+        bad(
+            count($leaked) . ' non-video file(s) exposed in the publish dir, e.g. ' . basename(dirname($leaked[0])) . '/' . basename($leaked[0]),
+            "Legacy jobs from before the work/publish split leak contact details and raw\n"
+            . "           uploads. Review, then remove: sudo rm -rf " . BSVE_PUB_DIR . '*'
+        );
     }
 }
 
@@ -273,7 +315,7 @@ if (is_file($legacyLock)) {
     );
 }
 
-$lockPath = BSVE_JOBS_DIR . '.worker.lock';
+$lockPath = BSVE_WORK_DIR . '.worker.lock';
 if (!is_file($lockPath)) {
     ok('worker lock absent', 'created on the next run');
 } else {

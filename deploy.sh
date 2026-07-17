@@ -28,7 +28,11 @@ main() {
     echo "--- Starting Deployment ---"
 
     SCRIPTS_DIR="/var/www/html/scripts"
-    JOBS_DIR="/var/www/html/tmp/bsve"
+    # Storage is split: WORK_DIR is private (raw uploads + job.json, which holds
+    # the user's name/email/phone/IP); PUB_DIR is public and only ever receives
+    # the finished MP4. Keep WORK_DIR outside the document root.
+    WORK_DIR="/var/lib/bsve"
+    PUB_DIR="/var/www/html/tmp/bsve"
 
     # 1. Sync the working tree to GitHub (the 'secret sauce' hard reset forces
     #    the server to match origin/main exactly, discarding local drift).
@@ -74,10 +78,13 @@ main() {
     # the server installs those rather than resolving fresh ones.
     sudo install -m 644 backend/composer.lock   "$SCRIPTS_DIR/"
 
-    # 5. Job directory: uploads and rendered MP4s. Apache must be able to write
-    #    here (uploads) and read here (serving the finished video).
-    echo "Ensuring job directory $JOBS_DIR ..."
-    sudo install -d -m 775 -o www-data -g www-data "$JOBS_DIR"
+    # 5. Storage. The work dir is private (0750, outside the document root) and
+    #    holds raw uploads and job.json; the publish dir is world-readable and
+    #    receives only finished MP4s.
+    echo "Ensuring private work directory $WORK_DIR ..."
+    sudo install -d -m 750 -o www-data -g www-data "$WORK_DIR"
+    echo "Ensuring public publish directory $PUB_DIR ..."
+    sudo install -d -m 755 -o www-data -g www-data "$PUB_DIR"
 
     # 6. PHP dependencies (the Anthropic SDK + HTTP client used by the worker).
     #    --no-dev installs only runtime deps; the lock file makes it reproducible.

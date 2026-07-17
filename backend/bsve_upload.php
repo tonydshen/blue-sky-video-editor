@@ -58,11 +58,14 @@ if ($clipCount > BSVE_MAX_CLIPS) {
 }
 
 // --- Create the job directory. ---
-$jobId  = date('Ymd-His') . '-' . bin2hex(random_bytes(4));
-$jobDir = BSVE_JOBS_DIR . $jobId;
+// This lives under BSVE_WORK_DIR, outside the web root: it holds the raw
+// uploads and job.json (name, email, phone, IP), none of which may be served
+// over HTTP. Only the finished MP4 is published, by the worker.
+$jobId  = date('Ymd-His') . '-' . bin2hex(random_bytes(8));
+$jobDir = BSVE_WORK_DIR . $jobId;
 $srcDir = $jobDir . '/src';
 
-if (!mkdir($srcDir, 0755, true) && !is_dir($srcDir)) {
+if (!mkdir($srcDir, 0750, true) && !is_dir($srcDir)) {
     bsve_fail('Could not create the job directory on the server.', 500);
 }
 
