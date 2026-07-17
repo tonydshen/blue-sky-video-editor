@@ -261,7 +261,10 @@ export default function BlueSkyVideoEditor() {
 
       Alert.alert(
         "Uploaded!",
-        `Your video is being edited. We'll email the link to ${profile.email} when it's ready — usually within a few minutes.`,
+        `Your video is being edited. We'll email the link to ${profile.email} `
+          + `when it's ready — usually within a few minutes.\n\n`
+          + `If you don't see it in your inbox, please check your junk or spam `
+          + `folder — the first email from us often lands there.`,
       );
     } catch (e: unknown) {
       Alert.alert(

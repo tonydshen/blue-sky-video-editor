@@ -221,7 +221,9 @@ Rules:
   The transition must be shorter than the shortest clip.
 - font_size: 32-56. Larger for short captions, smaller for long ones.
 - Cover: a title (and subtitle if it helps) that suits the material. Show it
-  long enough to read, 2.5-4s.
+  long enough to read, 2.5-4s. The title must never be empty — if the user gave
+  you nothing to work with, title-case their project title rather than
+  inventing details about the footage. The subtitle may be empty.
 - Ending: one line per entry. Lead with the closing message, then credits,
   copyright, and any disclaimer the user supplied. Do not invent credits,
   copyright holders, or disclaimers. 3-6s.
@@ -348,9 +350,27 @@ function bsve_validate_plan(array $raw, array $job): array
         $lines = ['Thanks for watching!'];
     }
 
+    // The cover title must never end up empty, or the render opens with a blank
+    // card. Fall back through the user's own title, the project title, and
+    // finally a generic one. Note ?? is not enough here: the model can return
+    // an empty string, which ?? happily accepts.
+    $coverTitle = '';
+    foreach ([
+        $raw['cover']['title'] ?? '',
+        $job['cover']['title'] ?? '',
+        $job['project_title'] ?? '',
+        'My Video',
+    ] as $candidate) {
+        $candidate = trim((string) $candidate);
+        if ($candidate !== '') {
+            $coverTitle = $candidate;
+            break;
+        }
+    }
+
     return [
         'cover' => [
-            'title'        => bsve_cut(trim((string) ($raw['cover']['title'] ?? $job['cover']['title'])), 80),
+            'title'        => bsve_cut($coverTitle, 80),
             'subtitle'     => bsve_cut(trim((string) ($raw['cover']['subtitle'] ?? '')), 100),
             'duration_sec' => bsve_clamp((float) ($raw['cover']['duration_sec'] ?? 3.0), 1.5, 10.0),
         ],
@@ -438,11 +458,15 @@ function bsve_build_ffmpeg_args(array $plan, array $job, string $workDir, string
     $args = array_merge($args, ['-f', 'lavfi', '-t', (string) $coverDur, '-i', $card]);
 
     $coverChain = ["[0:v]format=yuv420p,setsar=1"];
-    $coverChain[] = sprintf(
-        'drawtext=fontfile=%s:textfile=%s:fontcolor=white:fontsize=64:x=(w-text_w)/2:y=(h-text_h)/2-40',
-        BSVE_FONT,
-        bsve_text_file($txtDir, 'cover_title', $plan['cover']['title'])
-    );
+    // Guard: drawing an empty string yields a blank card, which reads as "the
+    // cover is missing". bsve_validate_plan() should have filled this in.
+    if (trim($plan['cover']['title']) !== '') {
+        $coverChain[] = sprintf(
+            'drawtext=fontfile=%s:textfile=%s:fontcolor=white:fontsize=64:x=(w-text_w)/2:y=(h-text_h)/2-40',
+            BSVE_FONT,
+            bsve_text_file($txtDir, 'cover_title', $plan['cover']['title'])
+        );
+    }
     if ($plan['cover']['subtitle'] !== '') {
         $coverChain[] = sprintf(
             'drawtext=fontfile=%s:textfile=%s:fontcolor=0xBBDEFB:fontsize=34:x=(w-text_w)/2:y=(h-text_h)/2+50',
