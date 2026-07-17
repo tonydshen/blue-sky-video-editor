@@ -30,9 +30,33 @@ $onlyJob = $options['job'] ?? null;
 $dryRun  = array_key_exists('dry-run', $options);
 
 // Only one worker at a time.
-$lock = fopen(sys_get_temp_dir() . '/bsve_worker.lock', 'c');
-if ($lock === false || !flock($lock, LOCK_EX | LOCK_NB)) {
-    exit(0);   // another run is still going; nothing to do
+//
+// The lock lives in the jobs directory, which deploy.sh guarantees is owned by
+// www-data. It must NOT live in a shared world-writable directory like /tmp:
+// there, a single run under sudo leaves behind a root-owned lock that the
+// www-data cron can then never open, silently wedging the worker forever.
+// Here, www-data owns the directory, so it can always replace a stray lock.
+$lockPath = BSVE_JOBS_DIR . '.worker.lock';
+$lock = @fopen($lockPath, 'c');
+
+if ($lock === false) {
+    // Failing to OPEN the lock is an error, not "someone else is running".
+    // Report it loudly — cron captures stderr — instead of exiting 0 and
+    // leaving jobs queued with no explanation.
+    fwrite(
+        STDERR,
+        "bsve_worker: cannot open lock file {$lockPath}.\n"
+        . "  Check it is writable by this user (" . get_current_user() . ").\n"
+        . "  A stale root-owned lock can be cleared with: sudo rm -f {$lockPath}\n"
+    );
+    exit(1);
+}
+
+// Let root- and www-data-initiated runs share the same lock file.
+@chmod($lockPath, 0666);
+
+if (!flock($lock, LOCK_EX | LOCK_NB)) {
+    exit(0);   // another run genuinely holds the lock; nothing to do
 }
 
 /** Load every job we should process, oldest first. */

@@ -264,6 +264,54 @@ if (!$cronFound) {
     );
 }
 
+// A lock the cron user cannot open stops every render, so check it explicitly.
+$legacyLock = sys_get_temp_dir() . '/bsve_worker.lock';
+if (is_file($legacyLock)) {
+    warning(
+        "stale lock from an older version: $legacyLock",
+        "No longer used — remove it: sudo rm -f $legacyLock"
+    );
+}
+
+$lockPath = BSVE_JOBS_DIR . '.worker.lock';
+if (!is_file($lockPath)) {
+    ok('worker lock absent', 'created on the next run');
+} else {
+    $lockOwner = function_exists('posix_getpwuid')
+        ? (posix_getpwuid(fileowner($lockPath))['name'] ?? '?')
+        : '?';
+    $lockPerms = substr(sprintf('%o', fileperms($lockPath)), -4);
+    if ($lockOwner === 'www-data' || $lockPerms === '0666') {
+        ok('worker lock usable by www-data', "owner $lockOwner, mode $lockPerms");
+    } else {
+        bad(
+            "worker lock owned by $lockOwner (mode $lockPerms) — www-data cannot open it, so nothing will render",
+            "sudo rm -f $lockPath   (it is recreated automatically)"
+        );
+    }
+}
+
+// The log the cron line writes to must be writable by www-data, or the
+// worker's own error output is lost.
+$cronLog = '/var/log/bsve.log';
+if (!is_file($cronLog)) {
+    warning(
+        "$cronLog does not exist",
+        "cron cannot create it in root-owned /var/log:\n"
+        . "           sudo touch $cronLog && sudo chown www-data:www-data $cronLog"
+    );
+} else {
+    $logOwner = function_exists('posix_getpwuid')
+        ? (posix_getpwuid(fileowner($cronLog))['name'] ?? '?')
+        : '?';
+    $logOwner === 'www-data'
+        ? ok('cron log writable by www-data', $cronLog)
+        : warning(
+            "$cronLog owned by $logOwner, not www-data — worker errors will be lost",
+            "sudo chown www-data:www-data $cronLog"
+        );
+}
+
 // ------------------------------------------------------------- Live API check
 if ($checkApi) {
     section('Live Claude call (--api)');
