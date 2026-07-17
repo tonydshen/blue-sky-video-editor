@@ -407,6 +407,14 @@ function bsve_drawtext(string $textPath, string $position, int $fontSize): strin
  * chained with xfade, each segment first normalised to the same size, frame
  * rate, pixel format and SAR (xfade requires identical inputs).
  *
+ * Every segment chain must END with `setpts=PTS-STARTPTS,fps=N`, in that order.
+ * setpts rebases each segment's timestamps to zero (xfade needs that to place
+ * the crossfades), but it also marks the stream's frame rate as unknown (1/0).
+ * FFmpeg 7's xfade rejects a non-CFR input outright — "The inputs needs to be a
+ * constant frame rate; current rate of 1/0 is invalid" — so the trailing fps
+ * filter must come after setpts to re-declare the rate. FFmpeg 6 tolerated the
+ * unknown rate, which is why this only shows up on newer servers.
+ *
  * @return string[] argv
  */
 function bsve_build_ffmpeg_args(array $plan, array $job, string $workDir, string $outFile): array
@@ -442,7 +450,9 @@ function bsve_build_ffmpeg_args(array $plan, array $job, string $workDir, string
             bsve_text_file($txtDir, 'cover_subtitle', $plan['cover']['subtitle'])
         );
     }
+    // setpts last, then fps, to hand xfade a CFR input (see the docblock).
     $coverChain[] = 'setpts=PTS-STARTPTS';
+    $coverChain[] = "fps={$fps}";
     $filters[] = implode(',', $coverChain) . '[seg0]';
     $segments[] = ['seg0', $coverDur];
 
@@ -457,8 +467,8 @@ function bsve_build_ffmpeg_args(array $plan, array $job, string $workDir, string
 
         $chain = [sprintf(
             '[%d:v]scale=%d:%d:force_original_aspect_ratio=decrease,'
-            . 'pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=%d,format=yuv420p',
-            $input, $w, $h, $w, $h, $fps
+            . 'pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p',
+            $input, $w, $h, $w, $h
         )];
         if ($clip['text'] !== '') {
             $chain[] = bsve_drawtext(
@@ -467,7 +477,9 @@ function bsve_build_ffmpeg_args(array $plan, array $job, string $workDir, string
                 $clip['font_size']
             );
         }
+        // setpts last, then fps, to hand xfade a CFR input (see the docblock).
         $chain[] = 'setpts=PTS-STARTPTS';
+        $chain[] = "fps={$fps}";
 
         $filters[] = implode(',', $chain) . "[{$label}]";
         $segments[] = [$label, $src['duration_sec']];
@@ -496,7 +508,9 @@ function bsve_build_ffmpeg_args(array $plan, array $job, string $workDir, string
             abs($offset)
         );
     }
+    // setpts last, then fps, to hand xfade a CFR input (see the docblock).
     $endChain[] = 'setpts=PTS-STARTPTS';
+    $endChain[] = "fps={$fps}";
     $filters[] = implode(',', $endChain) . '[segE]';
     $segments[] = ['segE', $endDur];
 
